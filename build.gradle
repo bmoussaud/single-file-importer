@@ -1,0 +1,81 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+
+group = 'com.xebialabs.deployit'
+version = '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.6
+sourceEncoding = 'UTF-8'
+
+configurations {
+  // http://issues.gradle.org/browse/GRADLE-784
+  provided
+}
+
+serverApiVersion = '3.5.1.2'
+pluginApiVersion = '3.5.1.2'
+
+dependencies {
+  provided "com.xebialabs.deployit:server-plugin-api:${serverApiVersion}"
+  compile 'com.google.code.findbugs:jsr305:1.3.9'
+  compile 'com.google.guava:guava:r09'
+  testCompile 'junit:junit:4.8.2'
+  testCompile 'ch.qos.logback:logback-classic:0.9.24'
+  testCompile "com.xebialabs.deployit.plugins:jee-plugin:${pluginApiVersion}"
+}
+
+repositories {
+	mavenLocal()
+}
+
+sourceSets {
+  main { compileClasspath += configurations.provided }
+  
+  // need the server-api to build *and* run the tests
+  test { 
+    compileClasspath += configurations.provided
+    runtimeClasspath += configurations.provided
+  }
+}
+
+afterEvaluate { eachProject ->
+  eachProject.tasks.withType(Test).each { testTask ->
+    testTask.onlyIf { !project.hasProperty('skipTests') }
+    testTask.afterSuite { descriptor, result ->
+      if (descriptor.className != null) {
+        println "${descriptor.className}: ${result.testCount} tests; failed: ${result.failedTestCount}; skipped: ${result.skippedTestCount}"
+      } else if (descriptor.className == null && descriptor.parent == null) {
+        println "Total: ${result.testCount} tests; failed: ${result.failedTestCount}; skipped: ${result.skippedTestCount}"
+      }
+    }
+  }
+}
+
+task generatePom << {
+  conf2ScopeMappings.addMapping(Integer.MAX_VALUE, configurations.provided, 
+    Conf2ScopeMappingContainer.PROVIDED)
+  pom { 
+    project { 
+      build { 
+        plugins {
+          plugin {
+            artifactId 'maven-compiler-plugin'
+            version '2.3'
+            configuration {
+              encoding = sourceEncoding 
+              source = "${sourceCompatibility}".toString()
+              target = "${sourceCompatibility}".toString()
+            }
+          }
+          plugin {
+            artifactId 'maven-resources-plugin'
+            version '2.3'
+            configuration {
+              encoding = sourceEncoding
+            }
+          }
+        } 
+      } 
+    } 
+  }.writeTo('pom.xml')
+}
